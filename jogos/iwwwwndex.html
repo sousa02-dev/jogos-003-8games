@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Dash</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #gameContainer {
+            position: relative;
+            text-align: center;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ff00;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+            z-index: 10;
+        }
+
+        #level {
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            display: block;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px #00ff00;
+            background: #0a0a0a;
+        }
+
+        #gameOver, #levelComplete, #startScreen {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px 60px;
+            border-radius: 20px;
+            color: #00ff00;
+            text-align: center;
+            z-index: 100;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 40px #00ff00;
+        }
+
+        #startScreen {
+            display: block;
+        }
+
+        h2 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #00ff00;
+        }
+
+        p {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px #00ff00;
+        }
+
+        #instructions {
+            font-size: 18px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div id="level">Fase: 1</div>
+            <div id="score">Pontos: 0</div>
+            <div id="attempts">Tentativas: 0</div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    
+    <div id="startScreen">
+        <h2>GEOMETRY DASH</h2>
+        <p>Prepare-se para o desafio!</p>
+        <button id="startBtn">INICIAR JOGO</button>
+        <div id="instructions">
+            🖱️ Clique ou toque na tela para pular<br>
+            ⭐ Colete estrelas para ganhar pontos<br>
+            ⚠️ Evite os obstáculos!
+        </div>
+    </div>
+
+    <div id="gameOver">
+        <h2>GAME OVER!</h2>
+        <p id="finalScore"></p>
+        <button id="restartBtn">TENTAR NOVAMENTE</button>
+        <button id="menuBtn">MENU INICIAL</button>
+    </div>
+
+    <div id="levelComplete">
+        <h2>FASE COMPLETA!</h2>
+        <p id="levelScore"></p>
+        <button id="nextLevelBtn">PRÓXIMA FASE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 400;
+
+        // Sistema de som
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playJumpSound() {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.frequency.value = 600;
+            osc.type = 'square';
+            
+            gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.1);
+        }
+
+        function playCrashSound() {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.frequency.value = 100;
+            osc.type = 'sawtooth';
+            
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.3);
+        }
+
+        function playStarSound() {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.frequency.value = 800;
+            osc.type = 'sine';
+            
+            gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.2);
+        }
+
+        function playLevelCompleteSound() {
+            const notes = [523, 659, 784, 1047];
+            notes.forEach((freq, i) => {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.frequency.value = freq;
+                osc.type = 'sine';
+                
+                const startTime = audioContext.currentTime + i * 0.15;
+                gain.gain.setValueAtTime(0.15, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                
+                osc.start(startTime);
+                osc.stop(startTime + 0.3);
+            });
+        }
+
+        // Variáveis do jogo
+        let gameRunning = false;
+        let currentLevel = 1;
+        let score = 0;
+        let attempts = 0;
+        let scrollSpeed = 5;
+        let cameraX = 0;
+
+        // Player
+        const player = {
+            x: 100,
+            y: 300,
+            width: 30,
+            height: 30,
+            velocityY: 0,
+            gravity: 0.8,
+            jumpForce: -15,
+            grounded: false,
+            rotation: 0
+        };
+
+        // Obstáculos e objetos
+        let obstacles = [];
+        let stars = [];
+        let particles = [];
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10;
+                this.life = 1;
+                this.color = color;
+                this.size = Math.random() * 4 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.3;
+                this.life -= 0.02;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - cameraX, this.y, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        function createParticles(x, y, color, count = 15) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // Geração de níveis
+        function generateLevel(level) {
+            obstacles = [];
+            stars = [];
+            scrollSpeed = 5 + (level - 1) * 1;
+            
+            const levelLength = 3000 + (level * 1000);
+            
+            if (level === 1) {
+                // Fase 1 - Básica
+                for (let i = 500; i < levelLength; i += 300) {
+                    obstacles.push({
+                        x: i,
+                        y: 340,
+                        width: 40,
+                        height: 40,
+                        type: 'spike'
+                    });
+                }
+                
+                for (let i = 800; i < levelLength; i += 400) {
+                    stars.push({
+                        x: i,
+                        y: 200,
+                        size: 15,
+                        collected: false,
+                        rotation: 0
+                    });
+                }
+            } else if (level === 2) {
+                // Fase 2 - Intermediária
+                for (let i = 400; i < levelLength; i += 250) {
+                    const height = Math.random() > 0.5 ? 60 : 40;
+                    obstacles.push({
+                        x: i,
+                        y: 380 - height,
+                        width: 40,
+                        height: height,
+                        type: 'spike'
+                    });
+                }
+                
+                for (let i = 600; i < levelLength; i += 500) {
+                    obstacles.push({
+                        x: i,
+                        y: 150,
+                        width: 150,
+                        height: 20,
+                        type: 'platform'
+                    });
+                }
+                
+                for (let i = 700; i < levelLength; i += 350) {
+                    stars.push({
+                        x: i,
+                        y: 180,
+                        size: 15,
+                        collected: false,
+                        rotation: 0
+                    });
+                }
+            } else if (level === 3) {
+                // Fase 3 - Avançada
+                for (let i = 300; i < levelLength; i += 200) {
+                    const height = 40 + Math.random() * 40;
+                    obstacles.push({
+                        x: i,
+                        y: 380 - height,
+                        width: 35,
+                        height: height,
+                        type: 'spike'
+                    });
+                }
+                
+                for (let i = 500; i < levelLength; i += 400) {
+                    obstacles.push({
+                        x: i,
+                        y: 100 + Math.random() * 100,
+                        width: 100,
+                        height: 15,
+                        type: 'platform'
+                    });
+                }
+                
+                for (let i = 650; i < levelLength; i += 300) {
+                    obstacles.push({
+                        x: i,
+                        y: 50,
+                        width: 40,
+                        height: 40,
+                        type: 'gear',
+                        rotation: 0
+                    });
+                }
+                
+                for (let i = 550; i < levelLength; i += 280) {
+                    stars.push({
+                        x: i,
+                        y: 150 + Math.random() * 100,
+                        size: 15,
+                        collected: false,
+                        rotation: 0
+                    });
+                }
+            }
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x - cameraX, player.y);
+            ctx.rotate(player.rotation);
+            
+            // Corpo do player (cubo com brilho)
+            const gradient = ctx.createLinearGradient(-15, -15, 15, 15);
+            gradient.addColorStop(0, '#ff0000');
+            gradient.addColorStop(1, '#ff6666');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(-player.width/2, -player.height/2, player.width, player.height);
+            
+            // Borda brilhante
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = 15;
+            ctx.strokeRect(-player.width/2, -player.height/2, player.width, player.height);
+            
+            ctx.restore();
+        }
+
+        function drawObstacle(obs) {
+            const screenX = obs.x - cameraX;
+            
+            if (obs.type === 'spike') {
+                // Triângulos pontiagudos
+                ctx.fillStyle = '#ffff00';
+                ctx.shadowColor = '#ffff00';
+                ctx.shadowBlur = 10;
+                
+                for (let i = 0; i < obs.width; i += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(screenX + i, obs.y + obs.height);
+                    ctx.lineTo(screenX + i + 10, obs.y);
+                    ctx.lineTo(screenX + i + 20, obs.y + obs.height);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            } else if (obs.type === 'platform') {
+                ctx.fillStyle = '#00ff00';
+                ctx.shadowColor = '#00ff00';
+                ctx.shadowBlur = 10;
+                ctx.fillRect(screenX, obs.y, obs.width, obs.height);
+            } else if (obs.type === 'gear') {
+                obs.rotation += 0.05;
+                ctx.save();
+                ctx.translate(screenX + obs.width/2, obs.y + obs.height/2);
+                ctx.rotate(obs.rotation);
+                
+                ctx.fillStyle = '#00ff00';
+                ctx.shadowColor = '#00ff00';
+                ctx.shadowBlur = 15;
+                
+                for (let i = 0; i < 8; i++) {
+                    ctx.save();
+                    ctx.rotate((Math.PI * 2 / 8) * i);
+                    ctx.fillRect(-5, -25, 10, 50);
+                    ctx.restore();
+                }
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, 15, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        function drawStar(star) {
+            if (star.collected) return;
+            
+            star.rotation += 0.05;
+            const screenX = star.x - cameraX;
+            
+            ctx.save();
+            ctx.translate(screenX, star.y);
+            ctx.rotate(star.rotation);
+            
+            ctx.fillStyle = '#ffff00';
+            ctx.shadowColor = '#ffff00';
+            ctx.shadowBlur = 20;
+            
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                const x = Math.cos(angle) * star.size;
+                const y = Math.sin(angle) * star.size;
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+                
+                const innerAngle = angle + Math.PI / 5;
+                const innerX = Math.cos(innerAngle) * (star.size * 0.5);
+                const innerY = Math.sin(innerAngle) * (star.size * 0.5);
+                ctx.lineTo(innerX, innerY);
+            }
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        function drawGround() {
+            ctx.fillStyle = '#00ff00';
+            ctx.shadowColor = '#00ff00';
+            ctx.shadowBlur = 5;
+            ctx.fillRect(0, 380, canvas.width, 20);
+            
+            // Padrão do chão
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < canvas.width; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(i, 380);
+                ctx.lineTo(i, 400);
+                ctx.stroke();
+            }
+        }
+
+        function jump() {
+            if (player.grounded) {
+                player.velocityY = player.jumpForce;
+                player.grounded = false;
+                playJumpSound();
+            }
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            
+            // Física do player
+            player.velocityY += player.gravity;
+            player.y += player.velocityY;
+            
+            // Chão
+            if (player.y >= 320) {
+                player.y = 320;
+                player.velocityY = 0;
+                player.grounded = true;
+                player.rotation = 0;
+            } else {
+                player.rotation += 0.1;
+            }
+            
+            // Câmera
+            cameraX += scrollSpeed;
+            
+            // Colisão com obstáculos
+            for (let obs of obstacles) {
+                if (obs.x - cameraX > canvas.width + 100) continue;
+                if (obs.x - cameraX < -100) continue;
+                
+                if (obs.type === 'platform') {
+                    if (player.x + player.width/2 > obs.x &&
+                        player.x - player.width/2 < obs.x + obs.width &&
+                        player.y + player.height/2 > obs.y &&
+                        player.y - player.height/2 < obs.y + obs.height) {
+                        
+                        if (player.velocityY > 0 && player.y < obs.y + 10) {
+                            player.y = obs.y - player.height/2;
+                            player.velocityY = 0;
+                            player.grounded = true;
+                        }
+                    }
+                } else {
+                    if (player.x + player.width/2 > obs.x &&
+                        player.x - player.width/2 < obs.x + obs.width &&
+                        player.y + player.height/2 > obs.y &&
+                        player.y - player.height/2 < obs.y + obs.height) {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+            
+            // Coleta de estrelas
+            for (let star of stars) {
+                if (star.collected) continue;
+                
+                const dx = player.x - star.x;
+                const dy = player.y - star.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 30) {
+                    star.collected = true;
+                    score += 10;
+                    document.getElementById('score').textContent = `Pontos: ${score}`;
+                    createParticles(star.x, star.y, '#ffff00', 20);
+                    playStarSound();
+                }
+            }
+            
+            // Verifica se completou a fase
+            const levelLength = 3000 + (currentLevel * 1000);
+            if (cameraX > levelLength) {
+                levelComplete();
+                return;
+            }
+            
+            // Atualiza partículas
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Background animado
+            const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            bgGradient.addColorStop(0, '#000000');
+            bgGradient.addColorStop(1, '#1a1a1a');
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Desenha elementos
+            drawGround();
+            
+            for (let obs of obstacles) {
+                if (obs.x - cameraX > canvas.width + 100) continue;
+                if (obs.x - cameraX < -100) continue;
+                drawObstacle(obs);
+            }
+            
+            for (let star of stars) {
+                if (star.x - cameraX > canvas.width + 100) continue;
+                if (star.x - cameraX < -100) continue;
+                drawStar(star);
+            }
+            
+            for (let particle of particles) {
+                particle.draw();
+            }
+            
+            drawPlayer();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameRunning = true;
+            currentLevel = 1;
+            score = 0;
+            attempts = 0;
+            cameraX = 0;
+            player.x = 100;
+            player.y = 300;
+            player.velocityY = 0;
+            player.rotation = 0;
+            particles = [];
+            
+            updateUI();
+            generateLevel(currentLevel);
+            gameLoop();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            attempts++;
+            playCrashSound();
+            createParticles(player.x, player.y, '#ff0000', 30);
+            
+            document.getElementById('finalScore').textContent = `Pontos: ${score} | Tentativa: ${attempts}`;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function levelComplete() {
+            gameRunning = false;
+            playLevelCompleteSound();
+            
+            document.getElementById('levelScore').textContent = `Fase ${currentLevel} completa! Pontos: ${score}`;
+            
+            if (currentLevel < 3) {
+                document.getElementById('levelComplete').style.display = 'block';
+            } else {
+                document.getElementById('finalScore').textContent = `VOCÊ VENCEU! Pontos finais: ${score}`;
+                document.getElementById('gameOver').style.display = 'block';
+            }
+        }
+
+        function nextLevel() {
+            document.getElementById('levelComplete').style.display = 'none';
+            currentLevel++;
+            cameraX = 0;
+            player.x = 100;
+            player.y = 300;
+            player.velocityY = 0;
+            player.rotation = 0;
+            particles = [];
+            gameRunning = true;
+            
+            updateUI();
+            generateLevel(currentLevel);
+            gameLoop();
+        }
+
+        function restartLevel() {
+            document.getElementById('gameOver').style.display = 'none';
+            cameraX = 0;
+            player.x = 100;
+            player.y = 300;
+            player.velocityY = 0;
+            player.rotation = 0;
+            particles = [];
+            gameRunning = true;
+            
+            generateLevel(currentLevel);
+            gameLoop();
+        }
+
+        function backToMenu() {
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'block';
+            currentLevel = 1;
+            score = 0;
+            attempts = 0;
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('level').textContent = `Fase: ${currentLevel}`;
+            document.getElementById('score').textContent = `Pontos: ${score}`;
+            document.getElementById('attempts').textContent = `Tentativas: ${attempts}`;
+        }
+
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', restartLevel);
+        document.getElementById('menuBtn').addEventListener('click', backToMenu);
+        document.getElementById('nextLevelBtn').addEventListener('click', nextLevel);
+
+        // Controles
+        canvas.addEventListener('click', jump);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                jump();
+            }
+        });
+    </script>
+</body>
+</html>

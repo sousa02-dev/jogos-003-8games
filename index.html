@@ -1,0 +1,296 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Menu de Jogos Online</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#000;
+    color:#fff;
+    font-family:Arial, sans-serif;
+    overflow:hidden;
+}
+
+/* 🌌 FUNDO ESTRELAS */
+#stars{
+    position:fixed;
+    inset:6;
+    z-index:-9;
+    background:#009;
+}
+
+/* ================= TELA INICIAL ================= */
+#enter{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:radial-gradient(circle at center,#987,000);
+    z-index:10;
+}
+
+.enter-box{
+    text-align:center;
+    animation:fadeIn 1.5s ease-in-out;
+}
+
+.enter-box h1{
+    font-size:68px;
+    margin-bottom:40px;
+    letter-spacing:3px;
+    color:#0099;
+    text-shadow:
+        0 0 10px #00ff99,
+        0 0 20px #00ff99,
+        0 0 40px #00ff99;
+}
+
+.enter-box button{
+    font-size:22px;
+    padding:18px 45px;
+    border:none;
+    border-radius:12px;
+    cursor:pointer;
+    background:#00ff99;
+    color:#000;
+    font-weight:bold;
+    letter-spacing:1px;
+    transition:0.3s;
+    box-shadow:
+        0 0 10px #00ff99,
+        0 0 20px #00ff99,
+        0 0 40px #00ff99;
+}
+
+.enter-box button:hover{
+    background:#00ffaa;
+    transform:scale(1.08);
+    box-shadow:
+        0 0 20px #00ffaa,
+        0 0 40px #00ffaa,
+        0 0 60px #00ffaa;
+}
+
+/* ================= MENU ================= */
+#menu{
+    display:none;
+    width:100vw;
+    height:100vh;
+    padding:30px;
+    overflow-y:auto;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+    gap:20px;
+}
+
+/* ================= CARD ================= */
+.card{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1;
+    background:#000;
+    border-radius:20px;
+    overflow:hidden;
+    cursor:pointer;
+    box-shadow:0 0 30px #000;
+    animation:float 3s ease-in-out infinite;
+}
+
+.card:hover{
+    box-shadow:0 0 40px #00ffcc;
+}
+
+.card iframe{
+    width:260%;
+    height:260%;
+    border:none;
+    pointer-events:none;
+    transform:scale(0.4);
+    transform-origin:top left;
+}
+
+.card span{
+    position:absolute;
+    bottom:0;
+    width:100%;
+    padding:10px;
+    background:linear-gradient(transparent,rgba(0,0,0,.85));
+    text-align:center;
+    font-size:16px;
+    z-index:2;
+}
+
+/* ================= ANIMAÇÕES ================= */
+@keyframes float{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-6px)}
+}
+
+@keyframes fadeIn{
+    from{opacity:0; transform:translateY(-20px);}
+    to{opacity:1; transform:translateY(0);}
+}
+
+/* ================= MOBILE ================= */
+@media (max-width:768px){
+    #menu{ padding:15px; }
+    .grid{ gap:14px; }
+    .card span{ font-size:14px; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🌌 FUNDO -->
+<canvas id="stars"></canvas>
+
+<!-- 🎵 ÁUDIOS -->
+<audio id="bgm" loop>
+    <source src="audio/musica.mp3" type="audio/mpeg">
+</audio>
+
+<audio id="clickSound">
+    <source src="audio/click.mp3" type="audio/mpeg">
+</audio>
+
+<!-- ========== TELA INICIAL ========== -->
+<div id="enter">
+    <div class="enter-box">
+        <h1>MENU DE JOGOS ONLINE</h1>
+        <button onclick="entrar()">🎮 INICIAR O MENU</button>
+    </div>
+</div>
+
+<!-- ========== MENU ========== -->
+<div id="menu">
+    <div class="grid">
+
+        <div class="card" onclick="abrir('jogos/jogo1/index.html')">
+            <iframe src="jogos/jogo1/index.html"></iframe>
+            <span>JOGO 1</span>
+        </div>
+
+        <div class="card" onclick="abrir('jogos/jogo2/index.html')">
+            <iframe src="jogos/jogo2/index.html"></iframe>
+            <span>JOGO 2</span>
+        </div>
+
+        <div class="card" onclick="abrir('jogos/jogo3/index.html')">
+            <iframe src="jogos/jogo3/index.html"></iframe>
+            <span>JOGO 3</span>
+        </div>
+
+        <div class="card" onclick="abrir('jogos/jogo4/index.html')">
+            <iframe src="jogos/jogo4/index.html"></iframe>
+            <span>JOGO 4</span>
+        </div>
+
+
+
+
+        <div class="card" onclick="abrir('jogos/jogo5/index.html')">
+            <iframe src="jogos/jogo5/index.html"></iframe>
+            <span>JOGO 5</span>
+        </div>
+
+        <div class="card" onclick="abrir('jogos/jogo6/index.html')">
+            <iframe src="jogos/jogo6/index.html"></iframe>
+            <span>JOGO 6</span>
+        </div>
+
+
+       <div class="card" onclick="abrir('jogos/jogo7/index.html')">
+            <iframe src="jogos/jogo7/index.html"></iframe>
+            <span>JOGO 7</span>
+        </div>
+
+
+      <div class="card" onclick="abrir('jogos/jogo8/index.html')">
+            <iframe src="jogos/jogo8/index.html"></iframe>
+            <span>JOGO 8</span>
+        </div>
+
+
+
+
+
+    </div>
+</div>
+
+<script>
+
+/* ================= ENTRAR ================= */
+function entrar(){
+    if(document.documentElement.requestFullscreen){
+        document.documentElement.requestFullscreen();
+    }
+    document.getElementById("enter").style.display="none";
+    document.getElementById("menu").style.display="block";
+    document.getElementById("bgm").play();
+}
+
+/* ================= ABRIR JOGO ================= */
+function abrir(pagina){
+    document.getElementById("clickSound").play();
+    setTimeout(()=>{
+        window.location.href = pagina;
+    },150);
+}
+
+/* ================= ESTRELAS ================= */
+const canvas = document.getElementById("stars");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
+
+let stars=[];
+for(let i=0;i<120;i++){
+    stars.push({
+        x:Math.random()*canvas.width,
+        y:Math.random()*canvas.height,
+        size:Math.random()*2,
+        speed:Math.random()*0.5+0.2
+    });
+}
+
+function animate(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="white";
+
+    stars.forEach(s=>{
+        s.y+=s.speed;
+        if(s.y>canvas.height){
+            s.y=0;
+            s.x=Math.random()*canvas.width;
+        }
+        ctx.beginPath();
+        ctx.arc(s.x,s.y,s.size,0,Math.PI*2);
+        ctx.fill();
+    });
+
+    requestAnimationFrame(animate);
+}
+animate();
+
+</script>
+
+</body>
+</html>

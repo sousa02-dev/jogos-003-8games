@@ -1,0 +1,372 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Color Bomb Arena - Retro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #000; --text: #fff; --primary: #f1c40f; }
+        * { box-sizing: border-box; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        body { 
+            margin: 0; background: var(--bg); color: var(--text); 
+            font-family: 'Press Start 2P', cursive; overflow: hidden;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;
+        }
+        #game-container { position: relative; border: 4px solid #555; background: #333; line-height: 0; }
+        canvas { display: block; image-rendering: pixelated; max-width: 100vw; max-height: 70vh; }
+        
+        .ui-top { width: 100%; max-width: 480px; display: flex; justify-content: space-between; padding: 10px; font-size: 10px; }
+        .ui-bottom { width: 100%; max-width: 480px; padding: 10px; text-align: center; font-size: 10px; color: var(--primary); }
+
+        #overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+        }
+        .menu-btn {
+            background: #444; color: white; border: 4px solid #fff; padding: 15px;
+            margin: 10px; cursor: pointer; font-family: 'Press Start 2P'; font-size: 12px;
+        }
+        .menu-btn:hover { background: var(--primary); color: #000; }
+
+        #mobile-controls {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;
+        }
+        .joy-btn {
+            width: 60px; height: 60px; background: #222; border: 2px solid #666;
+            display: flex; align-items: center; justify-content: center; border-radius: 10px;
+        }
+        .btn-bomb { background: #c0392b; border-color: #e74c3c; grid-column: 2; width: 80px;}
+
+        @media (min-width: 768px) { #mobile-controls { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="ui-top">
+        <div>TIME: <span id="timer">180</span></div>
+        <div>SCORE: <span id="score">000000</span></div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="overlay">
+            <h1 style="color:var(--primary); font-size: 18px; text-align: center;">COLOR BOMB ARENA</h1>
+            <div id="menu-content">
+                <p style="font-size: 8px;">SELECIONE OPONENTES:</p>
+                <button class="menu-btn" onclick="startGame(1)">1 OPONENTE</button>
+                <button class="menu-btn" onclick="startGame(2)">2 OPONENTES</button>
+                <button class="menu-btn" onclick="startGame(3)">3 OPONENTES</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ui-bottom">
+        LIVES: <span id="lives">3</span> | LVL: <span id="level">1</span>
+    </div>
+
+    <div id="mobile-controls">
+        <div></div><div class="joy-btn" id="up">▲</div><div></div>
+        <div class="joy-btn" id="left">◀</div><div class="joy-btn btn-bomb" id="bomb">BOMB</div><div class="joy-btn" id="right">▶</div>
+        <div></div><div class="joy-btn" id="down">▼</div><div></div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const TILE_SIZE = 32;
+    const ROWS = 13;
+    const COLS = 15;
+    
+    canvas.width = COLS * TILE_SIZE;
+    canvas.height = ROWS * TILE_SIZE;
+
+    // Estado do Jogo
+    let score = 0;
+    let currentLives = 3;
+    let currentLevel = 1;
+    let timeRemaining = 180;
+    let gameActive = false;
+    let opponentsCount = 0;
+    let map = [];
+    let entities = [];
+    let bombs = [];
+    let explosions = [];
+    let powerUps = [];
+
+    // Áudio (Web Audio API para tons 8-bit)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSfx(freq, type, dur) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + dur);
+    }
+
+    // Inicialização do Mapa (0: Vazio, 1: Parede, 2: Bloco Destrutível)
+    function initMap() {
+        map = [];
+        for (let r = 0; r < ROWS; r++) {
+            map[r] = [];
+            for (let c = 0; c < COLS; c++) {
+                if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1 || (r % 2 === 0 && c % 2 === 0)) {
+                    map[r][c] = 1; // Parede indestrutível
+                } else if (Math.random() > 0.6 && !isStartingArea(r, c)) {
+                    map[r][c] = 2; // Bloco marrom destrutível
+                } else {
+                    map[r][c] = 0;
+                }
+            }
+        }
+    }
+
+    function isStartingArea(r, c) {
+        const startPos = [[1,1], [1,2], [2,1], [ROWS-2, COLS-2], [1, COLS-2], [ROWS-2, 1]];
+        return startPos.some(p => p[0] === r && p[1] === c);
+    }
+
+    class Entity {
+        constructor(r, c, color, isPlayer = false) {
+            this.r = r; this.c = c;
+            this.x = c * TILE_SIZE; this.y = r * TILE_SIZE;
+            this.color = color; this.isPlayer = isPlayer;
+            this.bombRange = 2;
+            this.maxBombs = 1;
+            this.speed = 2;
+            this.moving = false;
+            this.dir = { x: 0, y: 0 };
+        }
+
+        update() {
+            if (this.isPlayer) this.handleInput();
+            else this.handleAI();
+
+            // Movimentação suave simples para o grid
+            let nextC = Math.round((this.x + this.dir.x * this.speed) / TILE_SIZE);
+            let nextR = Math.round((this.y + this.dir.y * this.speed) / TILE_SIZE);
+
+            if (map[nextR][nextC] === 0) {
+                this.x += this.dir.x * this.speed;
+                this.y += this.dir.y * this.speed;
+                this.r = Math.round(this.y / TILE_SIZE);
+                this.c = Math.round(this.x / TILE_SIZE);
+            }
+        }
+
+        handleAI() {
+            if (Math.random() > 0.98) {
+                const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+                this.dir = dirs[Math.floor(Math.random() * dirs.length)];
+                if (Math.random() > 0.7) placeBomb(this);
+            }
+        }
+
+        handleInput() {
+            this.dir = { x: 0, y: 0 };
+            if (keys['ArrowUp'] || activeTouch === 'up') this.dir.y = -1;
+            else if (keys['ArrowDown'] || activeTouch === 'down') this.dir.y = 1;
+            else if (keys['ArrowLeft'] || activeTouch === 'left') this.dir.x = -1;
+            else if (keys['ArrowRight'] || activeTouch === 'right') this.dir.x = 1;
+        }
+
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x + 4, this.y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(this.x + 6, this.y + 6, TILE_SIZE - 12, TILE_SIZE - 12);
+        }
+    }
+
+    function placeBomb(entity) {
+        const r = entity.r, c = entity.c;
+        if (bombs.some(b => b.r === r && b.c === c)) return;
+        
+        playSfx(200, 'square', 0.1);
+        bombs.push({ r, c, timer: 120, owner: entity, range: entity.bombRange });
+    }
+
+    function explode(bomb) {
+        playSfx(100, 'triangle', 0.4);
+        const area = [[0,0], [0,1], [0,-1], [1,0], [-1,0]];
+        area.forEach(dir => {
+            for (let i = (dir[0] === 0 && dir[1] === 0 ? 0 : 1); i <= bomb.range; i++) {
+                const nr = bomb.r + dir[0] * i;
+                const nc = bomb.c + dir[1] * i;
+                
+                if (map[nr][nc] === 1) break; // Parede para a explosão
+                
+                explosions.push({ r: nr, c: nc, timer: 20 });
+
+                if (map[nr][nc] === 2) {
+                    map[nr][nc] = 0;
+                    if (Math.random() > 0.8) powerUps.push({ r: nr, c: nc, type: 'range' });
+                    break; 
+                }
+
+                // Dano em entidades
+                entities.forEach((ent, index) => {
+                    if (ent.r === nr && ent.c === nc) {
+                        if (ent.isPlayer) {
+                            currentLives--;
+                            document.getElementById('lives').innerText = currentLives;
+                            if (currentLives <= 0) endGame(false);
+                        } else {
+                            entities.splice(index, 1);
+                            if (entities.length === 1) endGame(true);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    function startGame(ops) {
+        initAudio();
+        toggleFullScreen();
+        opponentsCount = ops;
+        initMap();
+        entities = [new Entity(1, 1, '#3498db', true)]; // Jogador
+        const colors = ['#e74c3c', '#2ecc71', '#9b59b6'];
+        for (let i = 0; i < ops; i++) {
+            const pos = [[ROWS-2, COLS-2], [1, COLS-2], [ROWS-2, 1]];
+            entities.push(new Entity(pos[i][0], pos[i][1], colors[i]));
+        }
+        
+        score = 0; timeRemaining = 180; gameActive = true;
+        document.getElementById('overlay').style.display = 'none';
+        gameLoop();
+    }
+
+    function endGame(victory) {
+        gameActive = false;
+        const reward = timeRemaining * 250 * opponentsCount;
+        if (victory) score += reward; else score -= reward;
+        
+        document.getElementById('score').innerText = Math.max(0, score).toString().padStart(6, '0');
+        document.getElementById('overlay').style.display = 'flex';
+        document.getElementById('menu-content').innerHTML = `
+            <h2 style="color:${victory?'#2ecc71':'#e74c3c'}">${victory?'VITÓRIA!':'DERROTA!'}</h2>
+            <p>PONTOS: ${reward}</p>
+            <button class="menu-btn" onclick="location.reload()">REJOGAR</button>
+        `;
+    }
+
+    function update() {
+        if (!gameActive) return;
+        if (frameCount % 60 === 0) {
+            timeRemaining--;
+            document.getElementById('timer').innerText = timeRemaining;
+            if (timeRemaining <= 0) endGame(false);
+        }
+
+        entities.forEach(ent => ent.update());
+        
+        bombs.forEach((b, i) => {
+            b.timer--;
+            if (b.timer <= 0) {
+                explode(b);
+                bombs.splice(i, 1);
+            }
+        });
+
+        explosions.forEach((ex, i) => {
+            ex.timer--;
+            if (ex.timer <= 0) explosions.splice(i, 1);
+        });
+
+        // Coleta de Power-ups
+        powerUps.forEach((p, i) => {
+            if (entities[0].r === p.r && entities[0].c === p.c) {
+                entities[0].bombRange++;
+                powerUps.splice(i, 1);
+                playSfx(600, 'sine', 0.2);
+            }
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (map[r][c] === 1) {
+                    ctx.fillStyle = '#888';
+                    ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeStyle = '#444';
+                    ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                } else if (map[r][c] === 2) {
+                    ctx.fillStyle = '#b38b59'; // Cor dos blocos destrutíveis fdrer55
+                    ctx.fillRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                } else {
+                    ctx.fillStyle = '#4a773c'; // Grama fdrer55
+                    ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+
+        powerUps.forEach(p => {
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(p.c * TILE_SIZE + 16, p.r * TILE_SIZE + 16, 8, 0, Math.PI*2);
+            ctx.fill();
+        });
+
+        bombs.forEach(b => {
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(b.c * TILE_SIZE + 16, b.r * TILE_SIZE + 16, 12, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = (frameCount % 20 < 10) ? '#ff0' : '#f00';
+            ctx.fillRect(b.c * TILE_SIZE + 14, b.r * TILE_SIZE + 4, 4, 4);
+        });
+
+        explosions.forEach(ex => {
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.7)';
+            ctx.fillRect(ex.c * TILE_SIZE, ex.r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        });
+
+        entities.forEach(ent => ent.draw());
+    }
+
+    let frameCount = 0;
+    function gameLoop() {
+        if (!gameActive) return;
+        frameCount++;
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Controles e API Fullscreen
+    const keys = {};
+    window.onkeydown = (e) => { 
+        keys[e.key] = true; 
+        if (e.code === 'Space') placeBomb(entities[0]);
+    };
+    window.onkeyup = (e) => keys[e.key] = false;
+
+    let activeTouch = null;
+    function setupTouch(id, key) {
+        const btn = document.getElementById(id);
+        btn.ontouchstart = (e) => { e.preventDefault(); activeTouch = key; };
+        btn.ontouchend = () => activeTouch = null;
+    }
+    setupTouch('up', 'up'); setupTouch('down', 'down');
+    setupTouch('left', 'left'); setupTouch('right', 'right');
+    document.getElementById('bomb').ontouchstart = () => placeBomb(entities[0]);
+
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        }
+    }
+
+    function initAudio() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Match 3 Game</title>
+
+<style>
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #2a003d, #000);
+  color: white;
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 10px;
+}
+
+#hud {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(8, 50px);
+  gap: 6px;
+  background: rgba(255,255,255,0.1);
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.cell {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.cell:hover {
+  transform: scale(1.1);
+}
+
+.selected {
+  outline: 4px solid white;
+}
+
+.red { background: #ff4d4d; }
+.blue { background: #4da6ff; }
+.green { background: #4dff88; }
+.yellow { background: #ffe44d; }
+.purple { background: #b84dff; }
+.orange { background: #ff9f4d; }
+
+button {
+  margin-top: 12px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(45deg, #a855f7, #ec4899);
+  color: white;
+  font-size: 16px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>✨ Match-3 Game</h1>
+
+<div id="hud">
+  <div>Pontos: <span id="score">0</span></div>
+  <div>Jogadas: <span id="moves">30</span></div>
+</div>
+
+<div id="grid"></div>
+
+<button onclick="resetGame()">Reiniciar</button>
+
+<!-- Sons -->
+<audio id="bgm" src="bgm.mp3" loop></audio>
+<audio id="matchSound" src="match.wav"></audio>
+
+<script>
+const SIZE = 8;
+const COLORS = ['red','blue','green','yellow','purple','orange'];
+let grid = [];
+let selected = null;
+let score = 0;
+let moves = 30;
+
+const gridEl = document.getElementById("grid");
+const scoreEl = document.getElementById("score");
+const movesEl = document.getElementById("moves");
+
+const bgm = document.getElementById("bgm");
+const matchSound = document.getElementById("matchSound");
+
+bgm.volume = 0.4;
+matchSound.volume = 0.7;
+
+document.body.addEventListener("click", () => bgm.play(), { once:true });
+
+function randomColor() {
+  return COLORS[Math.floor(Math.random()*COLORS.length)];
+}
+
+function createGrid() {
+  grid = [];
+  for (let r=0;r<SIZE;r++) {
+    grid[r] = [];
+    for (let c=0;c<SIZE;c++) {
+      grid[r][c] = randomColor();
+    }
+  }
+}
+
+function drawGrid() {
+  gridEl.innerHTML = "";
+  for (let r=0;r<SIZE;r++) {
+    for (let c=0;c<SIZE;c++) {
+      const div = document.createElement("div");
+      div.className = "cell " + grid[r][c];
+      if (selected && selected[0]==r && selected[1]==c)
+        div.classList.add("selected");
+      div.onclick = () => clickCell(r,c);
+      gridEl.appendChild(div);
+    }
+  }
+}
+
+function clickCell(r,c) {
+  if (moves <= 0) return;
+
+  if (!selected) {
+    selected = [r,c];
+  } else {
+    const [sr,sc] = selected;
+    if (Math.abs(sr-r)+Math.abs(sc-c)==1) {
+      swap(sr,sc,r,c);
+      if (checkMatches()) {
+        moves--;
+        movesEl.textContent = moves;
+        processMatches();
+      } else {
+        swap(sr,sc,r,c);
+      }
+    }
+    selected = null;
+  }
+  drawGrid();
+}
+
+function swap(r1,c1,r2,c2) {
+  const t = grid[r1][c1];
+  grid[r1][c1] = grid[r2][c2];
+  grid[r2][c2] = t;
+}
+
+function checkMatches() {
+  for (let r=0;r<SIZE;r++)
+    for (let c=0;c<SIZE-2;c++)
+      if (grid[r][c]==grid[r][c+1] && grid[r][c]==grid[r][c+2]) return true;
+
+  for (let c=0;c<SIZE;c++)
+    for (let r=0;r<SIZE-2;r++)
+      if (grid[r][c]==grid[r+1][c] && grid[r][c]==grid[r+2][c]) return true;
+
+  return false;
+}
+
+function processMatches() {
+  let removed = false;
+
+  for (let r=0;r<SIZE;r++)
+    for (let c=0;c<SIZE-2;c++)
+      if (grid[r][c]==grid[r][c+1] && grid[r][c]==grid[r][c+2]) {
+        grid[r][c]=grid[r][c+1]=grid[r][c+2]=null;
+        score += 30;
+        removed = true;
+      }
+
+  for (let c=0;c<SIZE;c++)
+    for (let r=0;r<SIZE-2;r++)
+      if (grid[r][c]==grid[r+1][c] && grid[r][c]==grid[r+2][c]) {
+        grid[r][c]=grid[r+1][c]=grid[r+2][c]=null;
+        score += 30;
+        removed = true;
+      }
+
+  if (removed) {
+    matchSound.currentTime = 0;
+    matchSound.play();
+    scoreEl.textContent = score;
+    drop();
+    setTimeout(processMatches, 200);
+  }
+}
+
+function drop() {
+  for (let c=0;c<SIZE;c++) {
+    let stack = [];
+    for (let r=SIZE-1;r>=0;r--)
+      if (grid[r][c]) stack.push(grid[r][c]);
+
+    for (let r=SIZE-1;r>=0;r--)
+      grid[r][c] = stack.shift() || randomColor();
+  }
+  drawGrid();
+}
+
+function resetGame() {
+  score = 0;
+  moves = 30;
+  scoreEl.textContent = score;
+  movesEl.textContent = moves;
+  createGrid();
+  drawGrid();
+}
+
+createGrid();
+drawGrid();
+</script>
+
+</body>
+</html>

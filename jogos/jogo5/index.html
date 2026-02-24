@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Bomberman Classic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(to bottom, #1a1a2e, #16213e, #0f3460);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Press Start 2P', monospace;
+      color: white;
+      overflow-x: hidden;
+      padding: 10px;
+    }
+    #title {
+      font-size: clamp(20px, 5vw, 40px);
+      background: linear-gradient(45deg, #ffd700, #ff8c00, #ff4500);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 3px 3px 0 #000;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    #subtitle {
+      color: #888;
+      font-size: 10px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #gameContainer {
+      position: relative;
+      background: #000;
+      border: 4px solid #444;
+      border-radius: 10px;
+      padding: 8px;
+      box-shadow: 0 0 30px rgba(255,215,0,0.3);
+    }
+    #gameCanvas {
+      display: block;
+      border-radius: 5px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      max-width: 100%;
+      height: auto;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      z-index: 10;
+    }
+    .hidden { display: none !important; }
+    .btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 12px;
+      padding: 15px 30px;
+      margin: 10px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .btn:hover { transform: scale(1.05); }
+    .btn:active { transform: scale(0.95); }
+    #startBtn {
+      background: linear-gradient(45deg, #22c55e, #16a34a);
+      color: white;
+    }
+    #restartBtn {
+      background: linear-gradient(45deg, #f97316, #dc2626);
+      color: white;
+    }
+    #controlsBtn {
+      background: transparent;
+      color: #888;
+      font-size: 10px;
+      padding: 10px 20px;
+    }
+    #stats {
+      margin-top: 15px;
+      display: flex;
+      gap: 20px;
+      font-size: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .stat { padding: 5px 10px; }
+    #mobileControls {
+      margin-top: 20px;
+      display: none;
+    }
+    @media (max-width: 768px) {
+      #mobileControls { display: block; }
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 70px);
+      gap: 10px;
+      justify-content: center;
+    }
+    .control-btn {
+      width: 70px;
+      height: 70px;
+      border: 2px solid #444;
+      background: #222;
+      color: white;
+      font-size: 24px;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      touch-action: none;
+    }
+    .control-btn:active { background: #444; }
+    .control-btn.bomb { background: #dc2626; border-color: #991b1b; }
+    #controlsInfo {
+      background: rgba(0,0,0,0.7);
+      padding: 15px;
+      border-radius: 10px;
+      margin: 10px;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+    .pulse { animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .bounce { animation: bounce 1s infinite; }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    #footer {
+      margin-top: 20px;
+      font-size: 8px;
+      color: #666;
+      text-align: center;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div id="title">BOMBERMAN</div>
+  <div id="subtitle">8-BIT CLASSIC</div>
+  
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="624" height="624"></canvas>
+    
+    <div id="overlay">
+      <div id="menuScreen">
+        <div class="pulse" style="font-size: 20px; color: #ffd700; margin-bottom: 30px;">PRESS START</div>
+        <button id="startBtn" class="btn">▶ START GAME</button>
+        <button id="controlsBtn" class="btn">🎮 Controls</button>
+        <div id="controlsInfo" class="hidden">
+          <p>↑ ↓ ← → or WASD - Move</p>
+          <p>SPACE - Place Bomb</p>
+          <p style="color: #ffd700; margin-top: 10px;">Destroy all enemies!</p>
+        </div>
+      </div>
+      
+      <div id="gameOverScreen" class="hidden">
+        <div style="font-size: 24px; color: #dc2626; margin-bottom: 20px;">GAME OVER</div>
+        <div style="font-size: 16px; margin-bottom: 30px;">SCORE: <span id="finalScore">000000</span></div>
+        <button id="restartBtn" class="btn">🔄 TRY AGAIN</button>
+      </div>
+      
+      <div id="victoryScreen" class="hidden">
+        <div class="bounce" style="font-size: 20px; color: #ffd700; margin-bottom: 20px;">CONGRATULATIONS!</div>
+        <div style="font-size: 16px; color: #22c55e; margin-bottom: 10px;">YOU WIN!</div>
+        <div style="font-size: 16px; margin-bottom: 30px;">SCORE: <span id="victoryScore">000000</span></div>
+        <button id="playAgainBtn" class="btn">▶ PLAY AGAIN</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="stats" class="hidden">
+    <span class="stat" style="color: #ffd700;">LVL <span id="level">1</span></span>
+    <span class="stat" style="color: #22c55e;">SCORE <span id="score">0</span></span>
+    <span class="stat" style="color: #dc2626;">♥ <span id="lives">3</span></span>
+  </div>
+  
+  <div id="mobileControls">
+    <div class="controls-grid">
+      <div></div>
+      <button class="control-btn" data-key="ArrowUp">▲</button>
+      <div></div>
+      <button class="control-btn" data-key="ArrowLeft">◀</button>
+      <button class="control-btn bomb" data-key="Space">💣</button>
+      <button class="control-btn" data-key="ArrowRight">▶</button>
+      <div></div>
+      <button class="control-btn" data-key="ArrowDown">▼</button>
+      <div></div>
+    </div>
+  </div>
+  
+  <div id="footer">
+    <p>© 1987 HUDSON SOFT - Tribute Version</p>
+    <p>Arrow keys or WASD to move, SPACE for bombs</p>
+  </div>
+
+  <script>
+    // Game Constants
+    const TILE_SIZE = 48;
+    const GRID_WIDTH = 13;
+    const GRID_HEIGHT = 13;
+    const PLAYER_SPEED = 2;
+    const ENEMY_SPEED = 1;
+    const BOMB_TIMER = 3000;
+    const EXPLOSION_DURATION = 500;
+    const BOMB_RANGE = 2;
+
+    // Game State
+    const GAME_STATES = { MENU: 'menu', PLAYING: 'playing', GAME_OVER: 'gameover', VICTORY: 'victory' };
+    let gameState = GAME_STATES.MENU;
+    let score = 0;
+    let lives = 3;
+    let level = 1;
+    let grid = [];
+    let player = null;
+    let enemies = [];
+    let bombs = [];
+    let explosions = [];
+    let powerups = [];
+    let keys = {};
+    let gameLoop = null;
+
+    // Canvas Setup
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Sound Manager
+    const sounds = {
+      bomb: createSound(200, 0.1),
+      explosion: createSound(100, 0.2),
+      move: createSound(400, 0.05),
+      death: createSound(150, 0.3),
+      powerup: createSound(600, 0.1),
+      victory: createSound(800, 0.2)
+    };
+
+    function createSound(freq, duration) {
+      return () => {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = freq;
+        oscillator.type = 'square';
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + duration);
+      };
+    }
+
+    // Initialize Grid
+    function initGrid() {
+      grid = [];
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        grid[y] = [];
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          if (x === 0 || x === GRID_WIDTH - 1 || y === 0 || y === GRID_HEIGHT - 1) {
+            grid[y][x] = 'wall';
+          } else if (x % 2 === 0 && y % 2 === 0) {
+            grid[y][x] = 'wall';
+          } else if ((x <= 2 && y <= 2) || (x >= GRID_WIDTH - 3 && y >= GRID_HEIGHT - 3)) {
+            grid[y][x] = 'empty';
+          } else if (Math.random() < 0.6) {
+            grid[y][x] = 'brick';
+          } else {
+            grid[y][x] = 'empty';
+          }
+        }
+      }
+    }
+
+    // Player
+    function createPlayer() {
+      return {
+        x: 1 * TILE_SIZE + TILE_SIZE / 2,
+        y: 1 * TILE_SIZE + TILE_SIZE / 2,
+        size: TILE_SIZE * 0.7,
+        speed: PLAYER_SPEED,
+        bombCount: 1,
+        bombRange: BOMB_RANGE,
+        alive: true
+      };
+    }
+
+    // Enemy
+    function createEnemy(x, y) {
+      return {
+        x: x * TILE_SIZE + TILE_SIZE / 2,
+        y: y * TILE_SIZE + TILE_SIZE / 2,
+        size: TILE_SIZE * 0.7,
+        speed: ENEMY_SPEED,
+        direction: Math.floor(Math.random() * 4),
+        changeTimer: 0,
+        alive: true
+      };
+    }
+
+    function spawnEnemies() {
+      enemies = [];
+      const count = 3 + level;
+      for (let i = 0; i < count; i++) {
+        let x, y;
+        do {
+          x = Math.floor(Math.random() * (GRID_WIDTH - 4)) + 2;
+          y = Math.floor(Math.random() * (GRID_HEIGHT - 4)) + 2;
+        } while (grid[y][x] !== 'empty' || (x <= 2 && y <= 2));
+        enemies.push(createEnemy(x, y));
+      }
+    }
+
+    // Game Initialization
+    function startGame() {
+      score = 0;
+      lives = 3;
+      level = 1;
+      initLevel();
+      gameState = GAME_STATES.PLAYING;
+      updateUI();
+      
+      // Request fullscreen on mobile
+      if (/Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          elem.msRequestFullscreen();
+        }
+      }
+      
+      if (gameLoop) cancelAnimationFrame(gameLoop);
+      gameLoop = requestAnimationFrame(update);
+    }
+
+    function initLevel() {
+      initGrid();
+      player = createPlayer();
+      spawnEnemies();
+      bombs = [];
+      explosions = [];
+      powerups = [];
+    }
+
+    // Input Handling
+    document.addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'w', 'a', 's', 'd'].includes(e.key)) {
+        e.preventDefault();
+      }
+      keys[e.key] = true;
+    });
+
+    document.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    // Mobile Controls
+    document.querySelectorAll('.control-btn').forEach(btn => {
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        keys[btn.dataset.key] = true;
+      });
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        keys[btn.dataset.key] = false;
+      });
+    });
+
+    // Collision Detection
+    function canMoveTo(x, y, size) {
+      const half = size / 2;
+      const gridX1 = Math.floor((x - half) / TILE_SIZE);
+      const gridY1 = Math.floor((y - half) / TILE_SIZE);
+      const gridX2 = Math.floor((x + half - 1) / TILE_SIZE);
+      const gridY2 = Math.floor((y + half - 1) / TILE_SIZE);
+      
+      return grid[gridY1][gridX1] === 'empty' && 
+             grid[gridY1][gridX2] === 'empty' && 
+             grid[gridY2][gridX1] === 'empty' && 
+             grid[gridY2][gridX2] === 'empty';
+    }
+
+    // Update Player
+    function updatePlayer() {
+      if (!player.alive) return;
+
+      let dx = 0, dy = 0;
+      if (keys['ArrowLeft'] || keys['a']) dx = -player.speed;
+      if (keys['ArrowRight'] || keys['d']) dx = player.speed;
+      if (keys['ArrowUp'] || keys['w']) dy = -player.speed;
+      if (keys['ArrowDown'] || keys['s']) dy = player.speed;
+
+      if (dx !== 0 || dy !== 0) {
+        const newX = player.x + dx;
+        const newY = player.y + dy;
+        if (canMoveTo(newX, player.y, player.size)) player.x = newX;
+        if (canMoveTo(player.x, newY, player.size)) player.y = newY;
+      }
+
+      if (keys['Space'] || keys[' ']) {
+        placeBomb();
+        keys['Space'] = false;
+        keys[' '] = false;
+      }
+
+      // Check powerup collision
+      powerups.forEach((powerup, i) => {
+        const dist = Math.hypot(player.x - powerup.x, player.y - powerup.y);
+        if (dist < TILE_SIZE / 2) {
+          sounds.powerup();
+          if (powerup.type === 'bomb') player.bombCount++;
+          if (powerup.type === 'range') player.bombRange++;
+          powerups.splice(i, 1);
+          score += 100;
+        }
+      });
+
+      // Check enemy collision
+      enemies.forEach(enemy => {
+        if (!enemy.alive) return;
+        const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (dist < player.size / 2 + enemy.size / 2) {
+          playerDeath();
+        }
+      });
+    }
+
+    // Place Bomb
+    function placeBomb() {
+      if (bombs.filter(b => b.owner === 'player').length >= player.bombCount) return;
+      
+      const gridX = Math.floor(player.x / TILE_SIZE);
+      const gridY = Math.floor(player.y / TILE_SIZE);
+      
+      if (bombs.some(b => b.gridX === gridX && b.gridY === gridY)) return;
+      
+      sounds.bomb();
+      bombs.push({
+        x: gridX * TILE_SIZE + TILE_SIZE / 2,
+        y: gridY * TILE_SIZE + TILE_SIZE / 2,
+        gridX, gridY,
+        timer: BOMB_TIMER,
+        range: player.bombRange,
+        owner: 'player'
+      });
+    }
+
+    // Update Enemies
+    function updateEnemies() {
+      enemies.forEach(enemy => {
+        if (!enemy.alive) return;
+
+        enemy.changeTimer--;
+        if (enemy.changeTimer <= 0) {
+          enemy.direction = Math.floor(Math.random() * 4);
+          enemy.changeTimer = 60;
+        }
+
+        let dx = 0, dy = 0;
+        if (enemy.direction === 0) dy = -enemy.speed;
+        if (enemy.direction === 1) dx = enemy.speed;
+        if (enemy.direction === 2) dy = enemy.speed;
+        if (enemy.direction === 3) dx = -enemy.speed;
+
+        const newX = enemy.x + dx;
+        const newY = enemy.y + dy;
+        if (canMoveTo(newX, enemy.y, enemy.size)) enemy.x = newX;
+        else enemy.direction = Math.floor(Math.random() * 4);
+        if (canMoveTo(enemy.x, newY, enemy.size)) enemy.y = newY;
+        else enemy.direction = Math.floor(Math.random() * 4);
+      });
+    }
+
+    // Update Bombs
+    function updateBombs() {
+      bombs.forEach((bomb, i) => {
+        bomb.timer -= 16;
+        if (bomb.timer <= 0) {
+          explodeBomb(bomb);
+          bombs.splice(i, 1);
+        }
+      });
+    }
+
+    // Explode Bomb
+    function explodeBomb(bomb) {
+      sounds.explosion();
+      const exp = [];
+      exp.push({ x: bomb.gridX, y: bomb.gridY });
+
+      const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      dirs.forEach(([dx, dy]) => {
+        for (let i = 1; i <= bomb.range; i++) {
+          const x = bomb.gridX + dx * i;
+          const y = bomb.gridY + dy * i;
+          if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) break;
+          if (grid[y][x] === 'wall') break;
+          
+          exp.push({ x, y });
+          
+          if (grid[y][x] === 'brick') {
+            grid[y][x] = 'empty';
+            if (Math.random() < 0.3) {
+              const type = Math.random() < 0.5 ? 'bomb' : 'range';
+              powerups.push({ 
+                x: x * TILE_SIZE + TILE_SIZE / 2, 
+                y: y * TILE_SIZE + TILE_SIZE / 2, 
+                type 
+              });
+            }
+            score += 10;
+            break;
+          }
+        }
+      });
+
+      explosions.push({ cells: exp, timer: EXPLOSION_DURATION });
+
+      // Check collisions
+      exp.forEach(cell => {
+        const cellX = cell.x * TILE_SIZE + TILE_SIZE / 2;
+        const cellY = cell.y * TILE_SIZE + TILE_SIZE / 2;
+        
+        if (Math.hypot(player.x - cellX, player.y - cellY) < TILE_SIZE / 2) {
+          playerDeath();
+        }
+        
+        enemies.forEach(enemy => {
+          if (enemy.alive && Math.hypot(enemy.x - cellX, enemy.y - cellY) < TILE_SIZE / 2) {
+            enemy.alive = false;
+            score += 200;
+          }
+        });
+      });
+    }
+
+    // Update Explosions
+    function updateExplosions() {
+      explosions.forEach((exp, i) => {
+        exp.timer -= 16;
+        if (exp.timer <= 0) explosions.splice(i, 1);
+      });
+    }
+
+    // Player Death
+    function playerDeath() {
+      if (!player.alive) return;
+      player.alive = false;
+      sounds.death();
+      lives--;
+      
+      setTimeout(() => {
+        if (lives > 0) {
+          player = createPlayer();
+          bombs = [];
+          explosions = [];
+        } else {
+          gameOver();
+        }
+      }, 1000);
+    }
+
+    // Check Victory
+    function checkVictory() {
+      if (enemies.every(e => !e.alive)) {
+        score += 1000 * level;
+        level++;
+        setTimeout(() => {
+          if (level > 5) {
+            victory();
+          } else {
+            initLevel();
+          }
+        }, 1500);
+      }
+    }
+
+    // Game Over
+    function gameOver() {
+      gameState = GAME_STATES.GAME_OVER;
+      document.getElementById('finalScore').textContent = score.toString().padStart(6, '0');
+      updateUI();
+      cancelAnimationFrame(gameLoop);
+    }
+
+    // Victory
+    function victory() {
+      gameState = GAME_STATES.VICTORY;
+      sounds.victory();
+      document.getElementById('victoryScore').textContent = score.toString().padStart(6, '0');
+      updateUI();
+      cancelAnimationFrame(gameLoop);
+    }
+
+    // Update UI
+    function updateUI() {
+      document.getElementById('overlay').classList.toggle('hidden', gameState === GAME_STATES.PLAYING);
+      document.getElementById('menuScreen').classList.toggle('hidden', gameState !== GAME_STATES.MENU);
+      document.getElementById('gameOverScreen').classList.toggle('hidden', gameState !== GAME_STATES.GAME_OVER);
+      document.getElementById('victoryScreen').classList.toggle('hidden', gameState !== GAME_STATES.VICTORY);
+      document.getElementById('stats').classList.toggle('hidden', gameState !== GAME_STATES.PLAYING);
+      document.getElementById('mobileControls').classList.toggle('hidden', gameState !== GAME_STATES.PLAYING);
+      
+      if (gameState === GAME_STATES.PLAYING) {
+        document.getElementById('score').textContent = score;
+        document.getElementById('lives').textContent = lives;
+        document.getElementById('level').textContent = level;
+      }
+    }
+
+    // Render
+    function render() {
+      ctx.fillStyle = '#1a5f1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Grid
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+          const px = x * TILE_SIZE;
+          const py = y * TILE_SIZE;
+          
+          if (grid[y][x] === 'wall') {
+            ctx.fillStyle = '#333';
+            ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+            ctx.fillStyle = '#555';
+            ctx.fillRect(px + 2, py + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+          } else if (grid[y][x] === 'brick') {
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+            ctx.fillStyle = '#a0522d';
+            ctx.fillRect(px + 4, py + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+          }
+        }
+      }
+
+      // Powerups
+      powerups.forEach(p => {
+        ctx.fillStyle = p.type === 'bomb' ? '#ffaa00' : '#ff00ff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, TILE_SIZE / 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Bombs
+      bombs.forEach(b => {
+        const flash = Math.floor(b.timer / 200) % 2 === 0;
+        ctx.fillStyle = flash ? '#000' : '#333';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, TILE_SIZE / 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Explosions
+      explosions.forEach(exp => {
+        const alpha = exp.timer / EXPLOSION_DURATION;
+        ctx.fillStyle = `rgba(255, 150, 0, ${alpha})`;
+        exp.cells.forEach(cell => {
+          ctx.fillRect(cell.x * TILE_SIZE, cell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        });
+      });
+
+      // Player
+      if (player && player.alive) {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.fillRect(player.x - 8, player.y - 8, 4, 4);
+        ctx.fillRect(player.x + 4, player.y - 8, 4, 4);
+      }
+
+      // Enemies
+      enemies.forEach(e => {
+        if (e.alive) {
+          ctx.fillStyle = '#ff0000';
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+    }
+
+    // Game Loop
+    function update() {
+      if (gameState === GAME_STATES.PLAYING) {
+        updatePlayer();
+        updateEnemies();
+        updateBombs();
+        updateExplosions();
+        checkVictory();
+        render();
+        updateUI();
+        gameLoop = requestAnimationFrame(update);
+      }
+    }
+
+    // Event Listeners
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    document.getElementById('playAgainBtn').addEventListener('click', startGame);
+    document.getElementById('controlsBtn').addEventListener('click', () => {
+      document.getElementById('controlsInfo').classList.toggle('hidden');
+    });
+
+    // Initial render
+    initGrid();
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Combinação de Frutas</title>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+    width:100%;
+    height:100%;
+    background:#ffe7b3;
+    overflow:hidden;
+    font-family: Arial, sans-serif;
+}
+
+/* START */
+#start-screen {
+    position:absolute;
+    inset:0;
+    background: linear-gradient(#ffe7b3, #ffc36a);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    z-index:10;
+    text-align:center;
+}
+
+#btnStart {
+    font-size:22px;
+    padding:14px 30px;
+    border:none;
+    background:#ff7b54;
+    color:#fff;
+    border-radius:14px;
+    cursor:pointer;
+}
+
+/* HUD */
+#hud {
+    position:absolute;
+    top:10px;
+    left:10px;
+    font-size:16px;
+}
+
+/* BOARD */
+#game {
+    display:grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap:8px;
+    width:90vmin;
+    height:90vmin;
+    margin:auto;
+    margin-top:60px;
+}
+
+/* FRUTAS */
+.tile {
+    border-radius:50%;
+    font-size:30px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    background: radial-gradient(circle at top, #fff, #ddd);
+    box-shadow: inset 0 -5px 8px rgba(0,0,0,.2);
+    transition: transform .15s;
+}
+
+.tile:active { transform: scale(0.9); }
+
+.match { animation: pop .3s; }
+
+@keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+    100% { transform: scale(1); }
+}
+</style>
+</head>
+
+<body>
+
+<!-- START -->
+<div id="start-screen">
+    <h1>🍓 Combinação de Frutas 🍊</h1>
+    <p>Combine frutas fofinhas e faça pontos!</p>
+    <button id="btnStart">▶ INICIAR</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+    Pontos: <b id="score">0</b>
+</div>
+
+<!-- GAME -->
+<div id="game"></div>
+
+<!-- SONS -->
+<audio id="sndSelect" src="https://cdn.pixabay.com/audio/2022/03/15/audio_6a1b7b0f7c.mp3"></audio>
+<audio id="sndSwap"   src="https://cdn.pixabay.com/audio/2022/03/10/audio_2a84f1e1a4.mp3"></audio>
+<audio id="sndImpact" src="https://cdn.pixabay.com/audio/2021/08/04/audio_8b9f6e1d0d.mp3"></audio>
+<audio id="sndMatch"  src="https://cdn.pixabay.com/audio/2022/03/15/audio_1b3c9fdb1a.mp3"></audio>
+
+<script>
+/* FULLSCREEN */
+function enterFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+
+/* CONFIG */
+const size = 8;
+const fruits = ["🍎","🍊","🍋","🍓","🍇","🍒"];
+let board = [];
+let selected = null;
+let score = 0;
+
+const game = document.getElementById("game");
+const scoreEl = document.getElementById("score");
+
+/* SONS */
+const sndSelect = document.getElementById("sndSelect");
+const sndSwap   = document.getElementById("sndSwap");
+const sndImpact = document.getElementById("sndImpact");
+const sndMatch  = document.getElementById("sndMatch");
+
+/* START */
+const btnStart = document.getElementById("btnStart");
+const startScreen = document.getElementById("start-screen");
+
+btnStart.onclick = () => {
+    enterFullscreen();
+    startScreen.style.display = "none";
+    initBoard();
+};
+
+/* BOARD */
+function initBoard() {
+    game.innerHTML = "";
+    board = [];
+    for (let i = 0; i < size * size; i++) {
+        const t = document.createElement("div");
+        t.className = "tile";
+        t.textContent = randomFruit();
+        t.onclick = () => selectTile(t);
+        board.push(t);
+        game.appendChild(t);
+    }
+}
+
+/* FRUIT */
+function randomFruit() {
+    return fruits[Math.floor(Math.random() * fruits.length)];
+}
+
+/* SELECT */
+function selectTile(tile) {
+    sndSelect.currentTime = 0;
+    sndSelect.play();
+
+    if (!selected) {
+        selected = tile;
+        tile.style.outline = "3px solid red";
+    } else {
+        sndSwap.currentTime = 0;
+        sndSwap.play();
+
+        [selected.textContent, tile.textContent] =
+        [tile.textContent, selected.textContent];
+
+        selected.style.outline = "";
+        selected = null;
+        checkMatches();
+    }
+}
+
+/* CHECK MATCH */
+function checkMatches() {
+    let matched = false;
+
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size - 2; c++) {
+            let i = r * size + c;
+            let f = board[i].textContent;
+            if (f &&
+                f === board[i+1].textContent &&
+                f === board[i+2].textContent) {
+                clearMatch([i,i+1,i+2]);
+                matched = true;
+            }
+        }
+    }
+
+    for (let c = 0; c < size; c++) {
+        for (let r = 0; r < size - 2; r++) {
+            let i = r * size + c;
+            let f = board[i].textContent;
+            if (f &&
+                f === board[i+size].textContent &&
+                f === board[i+size*2].textContent) {
+                clearMatch([i,i+size,i+size*2]);
+                matched = true;
+            }
+        }
+    }
+
+    if (!matched) {
+        sndImpact.currentTime = 0;
+        sndImpact.play();
+    }
+}
+
+/* CLEAR */
+function clearMatch(list) {
+    sndMatch.currentTime = 0;
+    sndMatch.play();
+
+    list.forEach(i => {
+        board[i].textContent = "";
+        board[i].classList.add("match");
+    });
+
+    score += list.length * 100;
+    scoreEl.textContent = score;
+
+    setTimeout(refill, 300);
+}
+
+/* REFILL */
+function refill() {
+    board.forEach(t => {
+        if (t.textContent === "") {
+            t.className = "tile";
+            t.textContent = randomFruit();
+        }
+    });
+}
+</script>
+
+</body>
+</html>

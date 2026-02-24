@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puzzle de Diamantes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.4);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #7e22ce;
+            font-size: 2em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat span {
+            color: #7e22ce;
+            font-size: 1.3em;
+        }
+
+        .game-area {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .board-container {
+            flex: 1;
+            min-width: 280px;
+            max-width: 450px;
+        }
+
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: #1a1a2e;
+            padding: 8px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            margin: 0 auto;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: #2a2a3e;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1em, 3vw, 1.5em);
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .cell.filled {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.5);
+        }
+
+        .cell.diamond {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            animation: diamond-glow 1.5s ease-in-out infinite;
+        }
+
+        .cell.preview {
+            background: rgba(102, 126, 234, 0.3) !important;
+            border: 2px dashed #667eea;
+        }
+
+        .cell.invalid {
+            background: rgba(239, 68, 68, 0.3) !important;
+            border: 2px dashed #ef4444;
+        }
+
+        @keyframes diamond-glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(245, 87, 108, 0.8); }
+            50% { box-shadow: 0 0 20px rgba(245, 87, 108, 1), 0 0 30px rgba(240, 147, 251, 0.8); }
+        }
+
+        .cell.highlight {
+            animation: pulse 0.5s;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .pieces-panel {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 250px;
+        }
+
+        .pieces-panel h3 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .pieces-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .piece {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: grab;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+        }
+
+        .piece:active {
+            cursor: grabbing;
+        }
+
+        .piece:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .piece.used {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .piece-grid {
+            display: grid;
+            gap: 3px;
+        }
+
+        .piece-cell {
+            width: 30px;
+            height: 30px;
+            border-radius: 3px;
+            background: transparent;
+        }
+
+        .piece-cell.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.5);
+        }
+
+        .particle {
+            position: fixed;
+            pointer-events: none;
+            border-radius: 50%;
+            z-index: 9999;
+            animation: particle-burst 0.8s ease-out forwards;
+        }
+
+        @keyframes particle-burst {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(var(--tx), var(--ty)) scale(0);
+                opacity: 0;
+            }
+        }
+
+        .clear-effect {
+            animation: clear-flash 0.5s;
+        }
+
+        @keyframes clear-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; background: #ffd700; transform: scale(1.1); }
+        }
+
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+        }
+
+        .game-over h2 {
+            color: #f5576c;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .restart-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .restart-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        @media (max-width: 768px) {
+            .game-area {
+                flex-direction: column;
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .piece-cell {
+                width: 25px;
+                height: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>💎 Puzzle de Diamantes 💎</h1>
+            <div class="stats">
+                <div class="stat">Pontos: <span id="score">0</span></div>
+                <div class="stat">Diamantes: <span id="diamonds">0</span>/<span id="totalDiamonds">0</span></div>
+            </div>
+        </div>
+
+        <div class="game-area">
+            <div class="pieces-panel">
+                <h3>Peças Disponíveis</h3>
+                <div class="pieces-container" id="piecesContainer"></div>
+            </div>
+
+            <div class="board-container">
+                <div class="game-board" id="gameBoard"></div>
+            </div>
+        </div>
+
+        <div class="game-over" id="gameOver">
+            <h2>🎉 Fim de Jogo! 🎉</h2>
+            <p style="font-size: 1.5em; margin: 20px 0;">Pontuação Final: <span id="finalScore">0</span></p>
+            <p style="font-size: 1.2em;">Diamantes Coletados: <span id="finalDiamonds">0</span></p>
+            <button class="restart-btn" onclick="restartGame()">Jogar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        const BOARD_SIZE = 8;
+        let board = [];
+        let score = 0;
+        let diamondsCollected = 0;
+        let totalDiamonds = 0;
+        let currentPieces = [];
+        let selectedPieceIndex = null;
+        let previewCells = [];
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(frequency, duration, type = 'sine', volume = 0.2) {
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = frequency;
+                oscillator.type = type;
+                
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function playPlaceSound() {
+            playSound(400, 0.1, 'square');
+        }
+
+        function playClearSound() {
+            playSound(600, 0.2);
+            setTimeout(() => playSound(800, 0.15), 50);
+        }
+
+        function playDiamondSound() {
+            playSound(800, 0.2);
+            setTimeout(() => playSound(1000, 0.15), 80);
+            setTimeout(() => playSound(1200, 0.1), 150);
+        }
+
+        function createParticles(element, color, count = 12) {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            for (let i = 0; i < count; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                
+                const angle = (Math.PI * 2 * i) / count;
+                const distance = 40 + Math.random() * 40;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+                
+                particle.style.cssText = `
+                    left: ${centerX}px;
+                    top: ${centerY}px;
+                    width: ${8 + Math.random() * 8}px;
+                    height: ${8 + Math.random() * 8}px;
+                    background: ${color};
+                    --tx: ${tx}px;
+                    --ty: ${ty}px;
+                `;
+                
+                document.body.appendChild(particle);
+                setTimeout(() => particle.remove(), 800);
+            }
+        }
+
+        function initBoard() {
+            board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+            
+            const diamondCount = 5 + Math.floor(Math.random() * 3);
+            totalDiamonds = diamondCount;
+            
+            for (let i = 0; i < diamondCount; i++) {
+                let row, col;
+                do {
+                    row = Math.floor(Math.random() * BOARD_SIZE);
+                    col = Math.floor(Math.random() * BOARD_SIZE);
+                } while (board[row][col] === 2);
+                board[row][col] = 2;
+            }
+            
+            renderBoard();
+            updateStats();
+        }
+
+        function renderBoard() {
+            const boardElement = document.getElementById('gameBoard');
+            boardElement.innerHTML = '';
+            
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    if (board[row][col] === 1) {
+                        cell.classList.add('filled');
+                    } else if (board[row][col] === 2) {
+                        cell.classList.add('diamond');
+                        cell.textContent = '💎';
+                    }
+                    
+                    cell.addEventListener('click', () => handleCellClick(row, col));
+                    cell.addEventListener('mouseenter', () => showPreview(row, col));
+                    
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        const pieceShapes = [
+            [[1]],
+            [[1, 1]],
+            [[1], [1]],
+            [[1, 1, 1]],
+            [[1], [1], [1]],
+            [[1, 1], [1, 1]],
+            [[1, 1, 1, 1]],
+            [[1], [1], [1], [1]],
+            [[1, 1], [1, 0]],
+            [[1, 0], [1, 1]],
+            [[1, 1, 1], [1, 0, 0]],
+            [[1, 1, 1], [0, 0, 1]],
+        ];
+
+        function generatePieces() {
+            currentPieces = [];
+            for (let i = 0; i < 3; i++) {
+                const shape = pieceShapes[Math.floor(Math.random() * pieceShapes.length)];
+                currentPieces.push({
+                    shape: JSON.parse(JSON.stringify(shape)),
+                    used: false
+                });
+            }
+            renderPieces();
+        }
+
+        function renderPieces() {
+            const container = document.getElementById('piecesContainer');
+            container.innerHTML = '';
+            
+            currentPieces.forEach((pieceData, index) => {
+                const piece = document.createElement('div');
+                piece.className = 'piece';
+                if (pieceData.used) piece.classList.add('used');
+                if (selectedPieceIndex === index) piece.style.border = '3px solid #667eea';
+                
+                const grid = document.createElement('div');
+                grid.className = 'piece-grid';
+                grid.style.gridTemplateColumns = `repeat(${pieceData.shape[0].length}, 30px)`;
+                
+                pieceData.shape.forEach(row => {
+                    row.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = 'piece-cell';
+                        if (cell === 1) {
+                            cellDiv.classList.add('active');
+                        }
+                        grid.appendChild(cellDiv);
+                    });
+                });
+                
+                piece.appendChild(grid);
+                container.appendChild(piece);
+                
+                if (!pieceData.used) {
+                    piece.addEventListener('click', () => selectPiece(index));
+                }
+            });
+        }
+
+        function selectPiece(index) {
+            if (currentPieces[index].used) return;
+            selectedPieceIndex = index;
+            renderPieces();
+            clearPreview();
+        }
+
+        function showPreview(row, col) {
+            if (selectedPieceIndex === null || currentPieces[selectedPieceIndex].used) return;
+            
+            clearPreview();
+            const shape = currentPieces[selectedPieceIndex].shape;
+            const canPlace = canPlacePiece(shape, row, col);
+            
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] === 1) {
+                        const boardRow = row + r;
+                        const boardCol = col + c;
+                        
+                        if (boardRow < BOARD_SIZE && boardCol < BOARD_SIZE) {
+                            const cell = document.querySelector(`[data-row="${boardRow}"][data-col="${boardCol}"]`);
+                            if (cell) {
+                                cell.classList.add(canPlace ? 'preview' : 'invalid');
+                                previewCells.push(cell);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function clearPreview() {
+            previewCells.forEach(cell => {
+                cell.classList.remove('preview', 'invalid');
+            });
+            previewCells = [];
+        }
+
+        function handleCellClick(row, col) {
+            if (selectedPieceIndex === null || currentPieces[selectedPieceIndex].used) return;
+            
+            const shape = currentPieces[selectedPieceIndex].shape;
+            
+            if (canPlacePiece(shape, row, col)) {
+                placePiece(shape, row, col);
+                currentPieces[selectedPieceIndex].used = true;
+                selectedPieceIndex = null;
+                
+                playPlaceSound();
+                clearPreview();
+                
+                setTimeout(() => {
+                    checkAndClearLines();
+                    renderPieces();
+                    
+                    if (currentPieces.every(p => p.used)) {
+                        generatePieces();
+                    }
+                    
+                    if (!hasValidMoves()) {
+                        setTimeout(() => endGame(), 500);
+                    }
+                }, 100);
+            }
+        }
+
+        function canPlacePiece(shape, startRow, startCol) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] === 1) {
+                        const boardRow = startRow + r;
+                        const boardCol = startCol + c;
+                        
+                        if (boardRow >= BOARD_SIZE || boardCol >= BOARD_SIZE ||
+                            board[boardRow][boardCol] === 1) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placePiece(shape, startRow, startCol) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] === 1) {
+                        board[startRow + r][startCol + c] = 1;
+                    }
+                }
+            }
+            renderBoard();
+        }
+
+        function checkAndClearLines() {
+            const linesToClear = [];
+            const diamondsToCollect = new Set();
+            
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                if (board[row].every(cell => cell === 1 || cell === 2)) {
+                    linesToClear.push({type: 'row', index: row});
+                    board[row].forEach((cell, col) => {
+                        if (cell === 2) diamondsToCollect.add(`${row},${col}`);
+                    });
+                }
+            }
+            
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                if (board.every(row => row[col] === 1 || row[col] === 2)) {
+                    linesToClear.push({type: 'col', index: col});
+                    board.forEach((row, rowIndex) => {
+                        if (row[col] === 2) diamondsToCollect.add(`${rowIndex},${col}`);
+                    });
+                }
+            }
+            
+            if (linesToClear.length > 0) {
+                highlightAndClear(linesToClear, diamondsToCollect);
+            }
+        }
+
+        function highlightAndClear(lines, diamonds) {
+            const cells = document.querySelectorAll('.cell');
+            
+            lines.forEach(line => {
+                cells.forEach(cell => {
+                    const row = parseInt(cell.dataset.row);
+                    const col = parseInt(cell.dataset.col);
+                    
+                    if ((line.type === 'row' && row === line.index) ||
+                        (line.type === 'col' && col === line.index)) {
+                        cell.classList.add('clear-effect');
+                        createParticles(cell, '#667eea', 8);
+                    }
+                });
+            });
+            
+            playClearSound();
+            
+            if (diamonds.size > 0) {
+                setTimeout(() => playDiamondSound(), 200);
+            }
+            
+            setTimeout(() => {
+                lines.forEach(line => {
+                    if (line.type === 'row') {
+                        board[line.index].fill(0);
+                    } else {
+                        board.forEach(row => row[line.index] = 0);
+                    }
+                });
+                
+                diamondsCollected += diamonds.size;
+                score += lines.length * 10 + diamonds.size * 50;
+                
+                updateStats();
+                renderBoard();
+                
+                if (diamondsCollected >= totalDiamonds) {
+                    setTimeout(() => endGame(), 500);
+                }
+            }, 500);
+        }
+
+        function hasValidMoves() {
+            for (let pieceData of currentPieces) {
+                if (pieceData.used) continue;
+                
+                for (let row = 0; row < BOARD_SIZE; row++) {
+                    for (let col = 0; col < BOARD_SIZE; col++) {
+                        if (canPlacePiece(pieceData.shape, row, col)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function updateStats() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('diamonds').textContent = diamondsCollected;
+            document.getElementById('totalDiamonds').textContent = totalDiamonds;
+        }
+
+        function endGame() {
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalDiamonds').textContent = `${diamondsCollected}/${totalDiamonds}`;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function restartGame() {
+            score = 0;
+            diamondsCollected = 0;
+            selectedPieceIndex = null;
+            document.getElementById('gameOver').style.display = 'none';
+            initBoard();
+            generatePieces();
+        }
+
+        document.getElementById('gameBoard').addEventListener('mouseleave', clearPreview);
+
+        initBoard();
+        generatePieces();
+    </script>
+</body>
+</html>

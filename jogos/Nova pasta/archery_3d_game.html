@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arco e Flecha 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+            font-family: 'Arial', sans-serif;
+        }
+        #canvas-container {
+            box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+        }
+        .info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 100;
+        }
+        .info div {
+            margin: 5px 0;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 15px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <div>🎯 Nível: <span id="level">1</span></div>
+        <div>🏹 Flechas: <span id="arrows">5</span></div>
+        <div>⭐ Pontos: <span id="score">0</span></div>
+        <div style="font-size: 14px; margin-top: 10px;">Clique e arraste para mirar e atirar</div>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script>
+        let game;
+        let cam;
+
+        class Game {
+            constructor() {
+                this.level = 1;
+                this.maxLevel = 5;
+                this.arrows = 5;
+                this.score = 0;
+                this.targets = [];
+                this.projectiles = [];
+                this.isAiming = false;
+                this.aimPower = 0;
+                this.aimAngleH = 0;
+                this.aimAngleV = -0.1;
+                this.startAimX = 0;
+                this.startAimY = 0;
+                this.gameState = 'playing'; // playing, levelComplete, gameOver, won
+                this.targetHit = false;
+                this.messageTimer = 0;
+                this.bowPull = 0;
+                
+                this.setupLevel();
+            }
+
+            setupLevel() {
+                this.targets = [];
+                this.projectiles = [];
+                this.arrows = 5;
+                
+                const numTargets = this.level;
+                const distance = 300 + this.level * 50;
+                
+                for (let i = 0; i < numTargets; i++) {
+                    let x, y, z, moving, speed, moveRange;
+                    
+                    if (this.level === 1) {
+                        // Nível 1: alvos estáticos
+                        x = (i - numTargets / 2 + 0.5) * 120;
+                        y = -50;
+                        z = -distance;
+                        moving = false;
+                    } else if (this.level === 2) {
+                        // Nível 2: alvos se movendo horizontalmente
+                        x = (i - numTargets / 2 + 0.5) * 150;
+                        y = -50;
+                        z = -distance;
+                        moving = 'horizontal';
+                        speed = 1 + Math.random() * 0.5;
+                        moveRange = 80;
+                    } else if (this.level === 3) {
+                        // Nível 3: alvos se movendo verticalmente
+                        x = (i - numTargets / 2 + 0.5) * 140;
+                        y = -50;
+                        z = -distance;
+                        moving = 'vertical';
+                        speed = 1 + Math.random() * 0.7;
+                        moveRange = 60;
+                    } else if (this.level === 4) {
+                        // Nível 4: alvos se movendo em círculo
+                        x = (i - numTargets / 2 + 0.5) * 130;
+                        y = -50;
+                        z = -distance;
+                        moving = 'circular';
+                        speed = 0.02 + Math.random() * 0.01;
+                        moveRange = 50;
+                    } else {
+                        // Nível 5: alvos com movimento complexo
+                        x = (i - numTargets / 2 + 0.5) * 120;
+                        y = -50;
+                        z = -distance;
+                        moving = 'random';
+                        speed = 0.8 + Math.random() * 0.5;
+                        moveRange = 70;
+                    }
+                    
+                    this.targets.push(new Target(x, y, z, moving, speed, moveRange));
+                }
+                
+                this.updateUI();
+            }
+
+            shootArrow() {
+                if (this.arrows <= 0 || this.gameState !== 'playing') return;
+                
+                this.arrows--;
+                const speed = map(this.bowPull, 0, 100, 8, 20);
+                
+                this.projectiles.push(new Arrow(
+                    0, -20, 0,
+                    this.aimAngleH,
+                    this.aimAngleV,
+                    speed
+                ));
+                
+                this.updateUI();
+            }
+
+            update() {
+                // Atualizar alvos
+                for (let target of this.targets) {
+                    target.update();
+                }
+                
+                // Atualizar flechas
+                for (let i = this.projectiles.length - 1; i >= 0; i--) {
+                    let arrow = this.projectiles[i];
+                    arrow.update();
+                    
+                    // Verificar colisão com alvos
+                    for (let j = this.targets.length - 1; j >= 0; j--) {
+                        let target = this.targets[j];
+                        if (target.checkHit(arrow)) {
+                            this.score += (this.level * 10);
+                            this.targets.splice(j, 1);
+                            this.projectiles.splice(i, 1);
+                            this.targetHit = true;
+                            setTimeout(() => this.targetHit = false, 500);
+                            this.updateUI();
+                            break;
+                        }
+                    }
+                    
+                    // Remover flechas que foram longe demais
+                    if (arrow.z < -1000 || arrow.y > 500 || arrow.y < -500) {
+                        this.projectiles.splice(i, 1);
+                    }
+                }
+                
+                // Verificar condições de fim de nível
+                if (this.gameState === 'playing') {
+                    if (this.targets.length === 0) {
+                        if (this.level >= this.maxLevel) {
+                            this.gameState = 'won';
+                        } else {
+                            this.gameState = 'levelComplete';
+                            this.messageTimer = 120; // 2 segundos
+                        }
+                    } else if (this.arrows === 0 && this.projectiles.length === 0) {
+                        this.gameState = 'gameOver';
+                    }
+                }
+                
+                // Timer para mensagens
+                if (this.messageTimer > 0) {
+                    this.messageTimer--;
+                    if (this.messageTimer === 0) {
+                        if (this.gameState === 'levelComplete') {
+                            this.level++;
+                            this.setupLevel();
+                            this.gameState = 'playing';
+                        }
+                    }
+                }
+            }
+
+            updateUI() {
+                document.getElementById('level').textContent = this.level;
+                document.getElementById('arrows').textContent = this.arrows;
+                document.getElementById('score').textContent = this.score;
+            }
+
+            draw() {
+                // Desenhar alvos
+                for (let target of this.targets) {
+                    target.draw();
+                }
+                
+                // Desenhar flechas
+                for (let arrow of this.projectiles) {
+                    arrow.draw();
+                }
+                
+                // Desenhar arco
+                this.drawBow();
+                
+                // Desenhar mira
+                if (this.isAiming) {
+                    this.drawAim();
+                }
+                
+                // Mensagens de status
+                if (this.gameState !== 'playing') {
+                    push();
+                    translate(0, 0, 100);
+                    fill(0, 0, 0, 150);
+                    rect(-width/2, -height/2, width, height);
+                    
+                    textAlign(CENTER, CENTER);
+                    textSize(48);
+                    fill(255);
+                    
+                    if (this.gameState === 'levelComplete') {
+                        fill(0, 255, 0);
+                        text('NÍVEL COMPLETO!', 0, -50);
+                        textSize(32);
+                        text(`Próximo nível: ${this.level + 1}`, 0, 20);
+                    } else if (this.gameState === 'won') {
+                        fill(255, 215, 0);
+                        text('PARABÉNS!', 0, -80);
+                        textSize(32);
+                        text('Você completou todos os níveis!', 0, -20);
+                        text(`Pontuação Final: ${this.score}`, 0, 30);
+                        textSize(24);
+                        text('Clique para jogar novamente', 0, 80);
+                    } else if (this.gameState === 'gameOver') {
+                        fill(255, 50, 50);
+                        text('GAME OVER', 0, -50);
+                        textSize(32);
+                        text(`Pontuação: ${this.score}`, 0, 10);
+                        textSize(24);
+                        text('Clique para tentar novamente', 0, 60);
+                    }
+                    pop();
+                }
+            }
+
+            drawBow() {
+                push();
+                translate(-50, 30, 50);
+                
+                // Corpo do arco
+                stroke(139, 69, 19);
+                strokeWeight(4);
+                noFill();
+                
+                beginShape();
+                for (let i = 0; i <= 20; i++) {
+                    let t = i / 20;
+                    let y = map(t, 0, 1, -40, 40);
+                    let x = -15 * sin(t * PI);
+                    if (this.isAiming) {
+                        x -= this.bowPull * 0.1;
+                    }
+                    vertex(x, y, 0);
+                }
+                endShape();
+                
+                // Corda
+                stroke(200);
+                strokeWeight(2);
+                if (this.isAiming) {
+                    line(-15 - this.bowPull * 0.1, -40, 0, -this.bowPull * 0.3, 0, 0);
+                    line(-15 - this.bowPull * 0.1, 40, 0, -this.bowPull * 0.3, 0, 0);
+                } else {
+                    line(-15, -40, 0, -15, 40, 0);
+                }
+                
+                pop();
+            }
+
+            drawAim() {
+                push();
+                stroke(255, 0, 0, 200);
+                strokeWeight(2);
+                noFill();
+                
+                // Cruz de mira
+                line(-20, 0, 100, -10, 0, 100);
+                line(10, 0, 100, 20, 0, 100);
+                line(0, -20, 100, 0, -10, 100);
+                line(0, 10, 100, 0, 20, 100);
+                
+                // Círculo de mira
+                translate(0, 0, 100);
+                circle(0, 0, 30);
+                
+                // Indicador de potência
+                let powerBarHeight = map(this.bowPull, 0, 100, 0, 60);
+                fill(255, 255 - this.bowPull * 2.55, 0, 200);
+                rect(-5, 20, 10, powerBarHeight);
+                
+                pop();
+            }
+        }
+
+        class Target {
+            constructor(x, y, z, moving, speed, moveRange) {
+                this.baseX = x;
+                this.baseY = y;
+                this.baseZ = z;
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                this.size = 50;
+                this.moving = moving;
+                this.speed = speed;
+                this.moveRange = moveRange;
+                this.time = random(1000);
+            }
+
+            update() {
+                this.time += this.speed;
+                
+                if (this.moving === 'horizontal') {
+                    this.x = this.baseX + sin(this.time * 0.02) * this.moveRange;
+                } else if (this.moving === 'vertical') {
+                    this.y = this.baseY + sin(this.time * 0.02) * this.moveRange;
+                } else if (this.moving === 'circular') {
+                    this.x = this.baseX + cos(this.time) * this.moveRange;
+                    this.y = this.baseY + sin(this.time) * this.moveRange;
+                } else if (this.moving === 'random') {
+                    this.x = this.baseX + sin(this.time * 0.03) * this.moveRange;
+                    this.y = this.baseY + cos(this.time * 0.025) * this.moveRange * 0.5;
+                }
+            }
+
+            checkHit(arrow) {
+                let d = dist(arrow.x, arrow.y, arrow.z, this.x, this.y, this.z);
+                return d < this.size / 2;
+            }
+
+            draw() {
+                push();
+                translate(this.x, this.y, this.z);
+                
+                // Anéis do alvo
+                noStroke();
+                fill(255, 0, 0);
+                circle(0, 0, this.size);
+                fill(255, 255, 255);
+                circle(0, 0, this.size * 0.75);
+                fill(0, 100, 255);
+                circle(0, 0, this.size * 0.5);
+                fill(255, 215, 0);
+                circle(0, 0, this.size * 0.25);
+                
+                pop();
+            }
+        }
+
+        class Arrow {
+            constructor(x, y, z, angleH, angleV, speed) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                this.vx = sin(angleH) * cos(angleV) * speed;
+                this.vy = sin(angleV) * speed;
+                this.vz = -cos(angleH) * cos(angleV) * speed;
+                this.gravity = 0.15;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+                this.vy += this.gravity;
+            }
+
+            draw() {
+                push();
+                translate(this.x, this.y, this.z);
+                
+                // Ponta da flecha
+                fill(150, 150, 150);
+                noStroke();
+                push();
+                rotateY(HALF_PI);
+                cone(3, 15);
+                pop();
+                
+                // Haste
+                stroke(139, 69, 19);
+                strokeWeight(3);
+                line(0, 0, 0, 15, 0, 0);
+                
+                // Penas
+                fill(255, 0, 0, 150);
+                noStroke();
+                triangle(12, 0, 0, 15, -3, 0, 15, 3, 0);
+                triangle(12, 0, 0, 15, 0, -3, 15, 0, 3);
+                
+                pop();
+            }
+        }
+
+        function setup() {
+            let canvas = createCanvas(900, 600, WEBGL);
+            canvas.parent('canvas-container');
+            game = new Game();
+        }
+
+        function draw() {
+            background(135, 206, 235);
+            
+            // Configurar câmera
+            camera(0, -50, 200, 0, 0, -200, 0, 1, 0);
+            
+            // Luz
+            ambientLight(100);
+            directionalLight(255, 255, 255, 0, 0.5, -1);
+            
+            // Chão
+            push();
+            translate(0, 100, -300);
+            rotateX(HALF_PI);
+            fill(34, 139, 34);
+            noStroke();
+            plane(1500, 1500);
+            pop();
+            
+            // Céu/horizonte
+            push();
+            translate(0, -200, -800);
+            fill(100, 150, 255, 100);
+            noStroke();
+            box(2000, 400, 10);
+            pop();
+            
+            // Atualizar e desenhar jogo
+            game.update();
+            game.draw();
+            
+            // Atualizar arco durante mira
+            if (game.isAiming) {
+                let dx = mouseX - game.startAimX;
+                let dy = mouseY - game.startAimY;
+                game.aimAngleH = map(dx, -200, 200, -0.5, 0.5);
+                game.aimAngleV = map(dy, -200, 200, 0.3, -0.5);
+                game.bowPull = constrain(dist(mouseX, mouseY, game.startAimX, game.startAimY), 0, 100);
+            }
+        }
+
+        function mousePressed() {
+            if (game.gameState !== 'playing') {
+                // Reiniciar jogo
+                if (game.gameState === 'gameOver') {
+                    game = new Game();
+                } else if (game.gameState === 'won') {
+                    game = new Game();
+                }
+            } else {
+                game.isAiming = true;
+                game.startAimX = mouseX;
+                game.startAimY = mouseY;
+            }
+        }
+
+        function mouseReleased() {
+            if (game.isAiming && game.gameState === 'playing') {
+                game.shootArrow();
+                game.isAiming = false;
+                game.bowPull = 0;
+            }
+        }
+    </script>
+</body>
+</html>
